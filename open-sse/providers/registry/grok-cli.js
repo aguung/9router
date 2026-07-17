@@ -32,10 +32,14 @@ export default {
       text: "Sign in with your xAI / Grok account via device code. Uses Grok Build subscription credits (cli-chat-proxy.grok.com).",
       signupUrl: "https://grok.com/supergrok",
     },
+    kindNotice: {
+      image: "Uses the same free grok-cli OAuth connection as chat — generated via the chat Responses API image_generation tool, not the paid Imagine API. No SuperGrok subscription required.",
+    },
   },
   category: "oauth",
   authModes: ["oauth"],
   hasOAuth: true,
+  serviceKinds: ["llm", "image"],
   thinkingConfig: {
     options: ["low", "medium", "high", "xhigh"],
     defaultMode: "high",
@@ -77,6 +81,7 @@ export default {
     { id: "grok-4.5-high", name: "Grok 4.5 (High)", upstreamModelId: "grok-4.5" },
     { id: "grok-4.5-medium", name: "Grok 4.5 (Medium)", upstreamModelId: "grok-4.5" },
     { id: "grok-4.5-low", name: "Grok 4.5 (Low)", upstreamModelId: "grok-4.5" },
+    { id: "grok-4.5-image", name: "Grok 4.5 Image", capabilities: ["text2img"], kind: "image" },
   ],
   features: {
     usage: true,

@@ -40,6 +40,7 @@ function applyAuth(headers, desc, credentials) {
 const HEADER_HOOKS = {
   kimiHeaders: (h) => Object.assign(h, buildKimiHeaders()),
   clineHeaders: (h, c) => Object.assign(h, buildClineHeaders(c.apiKey || c.accessToken)),
+  codebuddyApiKey: (h, c) => { const k = c.apiKey || c.accessToken; if (k) h["X-API-Key"] = k; },
   kilocodeOrg: (h, c) => { if (c.providerSpecificData?.orgId) h["X-Kilocode-OrganizationID"] = c.providerSpecificData.orgId; },
   claudeOverlay: (h) => {
     const cached = getCachedClaudeHeaders();

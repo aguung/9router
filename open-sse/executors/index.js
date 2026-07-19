@@ -50,6 +50,7 @@ const executors = {
   "mimo-free": new MimoFreeExecutor(),
   mmf: new MimoFreeExecutor(), // Alias for mimo-free
   "codebuddy-cn": new CodeBuddyExecutor(),
+  "codebuddy-ai": new CodeBuddyExecutor("codebuddy-ai"),
 };
 
 const defaultCache = new Map();

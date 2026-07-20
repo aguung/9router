@@ -15,6 +15,12 @@ import {
 import { MEMORY_CONFIG } from "../config/runtimeConfig.js";
 import { resolveSessionId } from "../utils/sessionManager.js";
 import { getConsistentMachineId } from "../shared/machineId.js";
+import { peekRetryRotate } from "./sseErrorPeek.js";
+
+// xAI emits capacity/overload as an event:error inside a 200-OK SSE body. Capacity
+// rotates to the next account; overload retries the same account first.
+export const GROK_SSE_ACCOUNT_FALLBACK_PATTERNS = ["at capacity due to high demand", "currently at capacity", "model_at_capacity"];
+export const GROK_SSE_RETRY_PATTERNS = ["overloaded", "service_unavailable"];
 
 // Server-generated item id prefixes that /responses cannot resolve when store=false
 const SERVER_ID_PATTERN = /^(rs|fc|resp|msg)_/;
@@ -131,8 +137,8 @@ export function normalizeGrokCliEffort(value) {
 export { supportsGrokCliReasoningEffort } from "../config/grokCli.js";
 
 export function resolveGrokCliSessionId(credentials, body) {
-  // ponytail: clients without stable thread metadata share one connection session;
-  // split further when their wire format exposes a durable conversation id.
+  // Clients without stable thread metadata share one connection session; split
+  // further only when their wire format exposes a durable conversation id.
   const explicitSessionBody = {
     prompt_cache_key: body?.prompt_cache_key,
     session_id: body?.session_id,
@@ -545,7 +551,15 @@ export class GrokCliExecutor extends BaseExecutor {
       this._agentId = args.credentials.providerSpecificData.deviceId;
     }
 
-    return super.execute(args);
+    // SSE-level capacity/overload errors arrive inside a 200-OK body; peek
+    // reclassifies them so the account/combo fallback loop can rotate.
+    return peekRetryRotate(() => super.execute(args), {
+      accountFallbackPatterns: GROK_SSE_ACCOUNT_FALLBACK_PATTERNS,
+      retryPatterns: GROK_SSE_RETRY_PATTERNS,
+      retryOverride: this.config.retry,
+      log: args.log,
+      tag: "GROK-CLI",
+    });
   }
 }
 

@@ -149,7 +149,7 @@ export default function ProvidersPage() {
     const fetchData = async () => {
       try {
         const [connectionsRes, nodesRes] = await Promise.all([
-          fetch("/api/providers"),
+          fetch("/api/providers?view=lean"),
           fetch("/api/provider-nodes"),
         ]);
         const connectionsData = await connectionsRes.json();

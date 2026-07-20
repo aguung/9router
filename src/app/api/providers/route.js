@@ -46,9 +46,25 @@ async function normalizeProxyPoolId(proxyPoolId) {
   return { proxyPoolId: normalizedId };
 }
 
-// GET /api/providers - List all connections
-export async function GET() {
+const LEAN_FIELDS = ["id", "provider", "authType", "name", "isActive", "testStatus", "lastError", "lastErrorType", "errorCode", "lastErrorAt"];
+
+function toLeanConnection(c) {
+  const lean = {};
+  for (const f of LEAN_FIELDS) lean[f] = c[f];
+  for (const k in c) {
+    if (k.startsWith("modelLock_")) lean[k] = c[k];
+  }
+  if (c.providerSpecificData?.prefix) lean.providerSpecificData = { prefix: c.providerSpecificData.prefix };
+  return lean;
+}
+
+// GET /api/providers - List all connections. `?view=lean` drops the per-connection
+// providerSpecificData blob and OAuth/token internals: with thousands of connections
+// the full payload is multi-MB and dominates dashboard load over the network. Editors
+// omit the param to keep the full object (they re-persist providerSpecificData on save).
+export async function GET(request) {
   try {
+    const lean = new URL(request.url).searchParams.get("view") === "lean";
     const connections = await getProviderConnections();
 
     // Build nodeNameMap for compatible providers (id → name)
@@ -66,7 +82,7 @@ export async function GET() {
       const name = isCompatible
         ? (c.name || nodeNameMap[c.provider] || c.providerSpecificData?.nodeName || c.provider)
         : c.name;
-      return {
+      const safe = {
         ...c,
         name,
         apiKey: undefined,
@@ -74,6 +90,7 @@ export async function GET() {
         refreshToken: undefined,
         idToken: undefined,
       };
+      return lean ? toLeanConnection(safe) : safe;
     });
 
     return NextResponse.json({ connections: safeConnections });

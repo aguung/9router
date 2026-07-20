@@ -501,7 +501,8 @@ export function openaiResponsesToOpenAIResponse(chunk, state) {
     // Avoid emitting duplicate errors (error + response.failed arrive back-to-back)
     if (state.finishReasonSent) return null;
 
-    const error = data.error || data.response?.error;
+    const error = data.error || data.response?.error ||
+      (data.message ? { message: data.message, code: data.code, type: data.type, param: data.param } : null);
     if (error) {
       state.error = error;
       state.finishReasonSent = true;

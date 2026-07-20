@@ -284,9 +284,24 @@ export const PATTERN_CAPABILITIES = [
  * @param {string} model
  * @returns {object} full capabilities object
  */
+// Resolution walks provider overrides + a pattern-rule list on every call. With
+// hundreds/thousands of models re-resolved per dashboard request (and per chat
+// routing decision), that recompute dominates. Cache by (provider, model) —
+// resolution is a pure function of static config, so entries never go stale.
+const CAPABILITY_CACHE = new Map();
+
 export function getCapabilitiesForModel(provider, model) {
   if (!model) return { ...DEFAULT_CAPABILITIES };
+  const cacheKey = `${provider || ""} ${model}`;
+  const cached = CAPABILITY_CACHE.get(cacheKey);
+  // Return a copy so callers may mutate the result without corrupting the cache.
+  if (cached) return { ...cached };
+  const resolved = resolveModelCapabilities(provider, model);
+  CAPABILITY_CACHE.set(cacheKey, resolved);
+  return { ...resolved };
+}
 
+function resolveModelCapabilities(provider, model) {
   // Canonical exact lookup strips vendor prefix: "anthropic/claude-opus-4.7" -> "claude-opus-4.7".
   const baseModel = model.includes("/") ? model.split("/").pop() : model;
 

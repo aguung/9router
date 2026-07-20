@@ -114,6 +114,10 @@ export default {
       model: stripImageSuffix(model),
       input: [{ role: "user", content }],
       tools: [{ type: "image_generation" }],
+      // Force the tool: with the default "auto", grok-cli's model may answer
+      // with text only and skip the image_generation_call, which surfaces as a
+      // spurious BAD_GATEWAY. Requiring a tool call guarantees the image item.
+      tool_choice: "required",
       stream: false,
       store: false,
       reasoning: {

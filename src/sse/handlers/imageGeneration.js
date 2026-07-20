@@ -17,15 +17,16 @@ import * as log from "../utils/logger.js";
 // Providers that don't require credentials (noAuth)
 const NO_AUTH_PROVIDERS = new Set(["sdwebui", "comfyui"]);
 
-// Shared prologue for both /v1/images/generations and /v1/images/edits:
-// parse JSON, enforce API key, validate model/prompt. Returns { error } on
-// failure, otherwise the parsed request fields.
-async function parseImageRequest(request) {
+/**
+ * Handle image generation request
+ * @param {Request} request
+ */
+export async function handleImageGeneration(request) {
   let body;
   try {
     body = await request.json();
   } catch {
-    return { error: errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid JSON body") };
+    return errorResponse(HTTP_STATUS.BAD_REQUEST, "Invalid JSON body");
   }
 
   const url = new URL(request.url);
@@ -37,30 +38,25 @@ async function parseImageRequest(request) {
   const apiKey = extractApiKey(request);
   const settings = await getSettings();
   if (settings.requireApiKey) {
-    if (!apiKey) return { error: errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key") };
+    if (!apiKey) return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Missing API key");
     const valid = await isValidApiKey(apiKey);
-    if (!valid) return { error: errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key") };
+    if (!valid) return errorResponse(HTTP_STATUS.UNAUTHORIZED, "Invalid API key");
   }
 
-  if (!modelStr) return { error: errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing model") };
-  if (!body.prompt) return { error: errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing required field: prompt") };
+  if (!modelStr) return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing model");
+  if (!body.prompt) return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing required field: prompt");
 
-  return { body, modelStr, settings, wantsStream, binaryOutput, preferredConnectionId };
-}
-
-// Combo expansion (model may be a combo name → fallback/round-robin across
-// models) or a direct single-model dispatch — shared by generation and edit.
-async function dispatchImageRequest(body, modelStr, settings, opts, logPrefix = "IMAGE") {
+  // Combo expansion: model may be a combo name → run fallback/round-robin across models
   const comboModels = await getComboModels(modelStr);
   if (comboModels) {
     const comboStrategies = settings.comboStrategies || {};
     const comboStrategy = comboStrategies[modelStr]?.fallbackStrategy || settings.comboStrategy || "fallback";
     const comboStickyLimit = settings.comboStickyRoundRobinLimit;
-    log.info(logPrefix, `Combo "${modelStr}" with ${comboModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
+    log.info("IMAGE", `Combo "${modelStr}" with ${comboModels.length} models (strategy: ${comboStrategy}, sticky: ${comboStickyLimit})`);
     return handleComboChat({
       body,
       models: comboModels,
-      handleSingleModel: (b, m) => handleSingleModelImage(b, m, opts),
+      handleSingleModel: (b, m) => handleSingleModelImage(b, m, { wantsStream, binaryOutput, preferredConnectionId }),
       log,
       comboName: modelStr,
       comboStrategy,
@@ -68,38 +64,7 @@ async function dispatchImageRequest(body, modelStr, settings, opts, logPrefix = 
     });
   }
 
-  return handleSingleModelImage(body, modelStr, opts);
-}
-
-/**
- * Handle image generation request (POST /v1/images/generations)
- * @param {Request} request
- */
-export async function handleImageGeneration(request) {
-  const parsed = await parseImageRequest(request);
-  if (parsed.error) return parsed.error;
-  const { body, modelStr, settings, ...opts } = parsed;
-  return dispatchImageRequest(body, modelStr, settings, opts);
-}
-
-/**
- * Handle image edit request (POST /v1/images/edits) — same pipeline as
- * generation, plus the OpenAI-shaped requirement that a source image is
- * present. Provider adapters that accept input_image content alongside the
- * prompt (grok-cli, codex, gemini, ...) already handle image/images via
- * their own buildBody — this route only adds the dedicated path + the
- * image-required validation the real edits endpoint has.
- * @param {Request} request
- */
-export async function handleImageEdit(request) {
-  const parsed = await parseImageRequest(request);
-  if (parsed.error) return parsed.error;
-  const { body, modelStr, settings, ...opts } = parsed;
-
-  const hasImage = body.image != null || (Array.isArray(body.images) ? body.images.length > 0 : body.images != null);
-  if (!hasImage) return errorResponse(HTTP_STATUS.BAD_REQUEST, "Missing required field: image (or images)");
-
-  return dispatchImageRequest(body, modelStr, settings, opts, "IMAGE_EDIT");
+  return handleSingleModelImage(body, modelStr, { wantsStream, binaryOutput, preferredConnectionId });
 }
 
 async function handleSingleModelImage(body, modelStr, { wantsStream, binaryOutput, preferredConnectionId } = {}) {
